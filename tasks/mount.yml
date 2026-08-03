@@ -92,18 +92,20 @@
 # FIXME
 # this results in ??? failed mounts
 # the metadata is the culprit
-# - name: Ensure 0 byte marker exists
-#   amazon.aws.s3_object:
-#     bucket: "{{ _bucket }}"
-#     object: "{{ mount.s3_prefix }}/"
-#     region: "{{ aws_region }}"
-#     mode: put
-#     content: ""
-#     overwrite: true
-#     metadata: "{{ required_metadata }}"
-#   delegate_to: localhost
-#   become: false
-#   when: (zbm.s3_keys | length == 0) or metadata_needs_updating
+- name: Ensure 0 byte marker exists
+  amazon.aws.s3_object:
+    bucket: "{{ _bucket }}"
+    object: "{{ mount.s3_prefix }}/"
+    region: "{{ aws_region }}"
+    mode: put
+    content: ""
+    overwrite: true
+    metadata: "{{ required_metadata }}"
+    headers:
+      Content-Type: "application/x-directory; charset=UTF-8"
+  delegate_to: localhost
+  become: false
+  when: (zbm.s3_keys | length == 0) or metadata_needs_updating
 
 
 # At this stage we should have everything to mount
