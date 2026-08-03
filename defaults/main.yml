@@ -1,0 +1,21 @@
+---
+s3fs_mounts: []
+
+# defaults to be used for each mount
+s3fs_bucket:
+s3fs_region: "{{ aws_region }}"
+s3fs_flags:
+  - iam_role=auto
+  - _netdev
+  - allow_other
+  - compat_dir
+  - nonempty
+  - enable_content_md5
+  - "endpoint={{ s3fs_region }}"
+  - "url=https://s3.{{ s3fs_region }}.amazonaws.com"
+
+# Whether to create local_dir
+s3fs_create_local_dir: true
+s3fs_local_dir_uid: 0
+s3fs_local_dir_gid: 0
+s3fs_local_dir_mode: "40755"

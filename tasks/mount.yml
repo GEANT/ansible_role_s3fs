@@ -1,0 +1,124 @@
+---
+# - debug: var=mount
+- debug: var=ansible_facts['mounts']
+
+# TODO: verify all required options are set
+
+- name: Stat local dir
+  ansible.builtin.stat:
+    path: "{{ mount.local_dir }}"
+  register: _local_dir
+
+- name: Check if local folder is empty
+  ansible.builtin.command:
+    argv:
+      - find
+      - "{{ mount.local_dir }}"
+      - -mindepth
+      - "1"
+      - -print
+      - -quit
+  register: _find_check
+  changed_when: false
+  failed_when: false
+  when:
+    - _local_dir.stat.exists
+    - _local_dir.stat.isdir
+
+# TODO check if something is mounted already
+#
+- name: set facts
+  ansible.builtin.set_fact:
+    local_dir_exists: "{{ _local_dir.stat.exists and _local_dir.stat.isdir }}"
+    local_dir_is_empty: "{{ _local_dir.stat.exists and _local_dir.stat.isdir and _find_check.stdout == '' }}"
+    local_dir_is_mounted: "{{ mount.local_dir in ansible_facts['mounts'] | map(attribute='mount') }}"
+    _bucket: "{{ mount.bucket | default(s3fs_bucket) }}"
+
+- debug: var=local_dir_is_mounted
+
+- name: Ensure local path exists and has correct owner/group/mode
+  ansible.builtin.file:
+    path: "{{ mount.local_dir }}"
+    state: directory
+    owner: "{{ mount.local_dir_uid | default(s3fs_local_dir_uid) }}"
+    group: "{{ mount.local_dir_gid | default(s3fs_local_dir_gid) }}"
+    mode: "{{ mount.local_dir_mode | default(s3fs_local_dir_mode) | string }}"
+  when:
+    - local_dir_is_empty
+    - mount.create_local_dir | default(s3fs_create_local_dir)
+
+# - debug: var=_local_dir
+# - debug: var=_find_check
+
+- name: Fetch 0 byte marker info
+  amazon.aws.s3_object_info:
+    bucket_name: "{{ _bucket }}"
+    prefix: "{{ mount.s3_prefix }}/"
+    max_keys: 1
+  delegate_to: localhost
+  become: false
+  register: zbm
+# - debug: var=zbm
+
+- name: Fetch 0 byte marker info - details
+  amazon.aws.s3_object_info:
+    bucket_name: "{{ _bucket }}"
+    object_name: "{{ mount.s3_prefix }}/"
+    max_keys: 1
+  delegate_to: localhost
+  become: false
+  when: zbm.s3_keys|length == 1
+  register: zbmi
+# - debug: var=zbmi
+
+# - debug: var=zbmi.object_info[0].object_data.metadata
+
+- name: Set metadata
+  ansible.builtin.set_fact:
+    required_metadata:
+      uid: "{{ mount.local_dir_uid | default(_local_path.stat.uid) | default(s3fs_local_dir_uid) | string }}"
+      gid: "{{ mount.local_dir_gid | default(_local_path.stat.gid) | default(s3fs_local_dir_gid) | string }}"
+      mode: "{{ mount.local_dir_mode | default(_local_path.stat.mode) | default(s3fs_local_dir_mode) | string }}"
+    current_metadata: "{{ zbmi | json_query('object_info[0].object_data.metadata') | default({}, true) }}"
+# - debug: var=required_metadata
+# - debug: var=current_metadata
+
+- name: Set update flag
+  ansible.builtin.set_fact:
+    metadata_needs_updating: "{{ required_metadata.items() | difference(current_metadata.items()) | length > 0 }}"
+
+# - debug: var=metadata_needs_updating
+
+# FIXME
+# this results in ??? failed mounts
+# the metadata is the culprit
+# - name: Ensure 0 byte marker exists
+#   amazon.aws.s3_object:
+#     bucket: "{{ _bucket }}"
+#     object: "{{ mount.s3_prefix }}/"
+#     region: "{{ aws_region }}"
+#     mode: put
+#     content: ""
+#     overwrite: true
+#     metadata: "{{ required_metadata }}"
+#   delegate_to: localhost
+#   become: false
+#   when: (zbm.s3_keys | length == 0) or metadata_needs_updating
+
+
+# At this stage we should have everything to mount
+# TODO: warn if mountpoint is not empty and:
+# - stop services
+# - sync content to bucket/prefix
+# - remove old content below mountpoint
+
+- debug: var=_bucket
+- debug: var=mount.s3_prefix
+
+- name: Ensure bucket/prefix is mounted
+  ansible.posix.mount:
+    path: "{{ mount.local_dir }}"
+    src: "{{ _bucket }}:/{{ mount.s3_prefix | regex_replace('^/', '') }}"
+    fstype: fuse.s3fs
+    opts: "{{ s3fs_flags | sort | join(',') }}"
+    state: mounted

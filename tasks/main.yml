@@ -1,0 +1,13 @@
+---
+- name: Ensure required packages are installed
+  ansible.builtin.apt:
+    name:
+      - s3fs
+  become: true
+
+- name: Ensure mounts are available
+  ansible.builtin.include_tasks:
+    file: mount.yml
+  loop: "{{ s3fs_mounts }}"
+  loop_control:
+    loop_var: mount
