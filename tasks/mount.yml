@@ -1,19 +1,43 @@
 ---
-# - debug: var=mount
-- debug: var=ansible_facts['mounts']
-
 # TODO: verify all required options are set
+# -> ensure s3_prefix has one trailing slash
+# -> ensure s3_prefix does not have a leading slash
 
-- name: Stat local dir
+- name: Stat mount_point
   ansible.builtin.stat:
-    path: "{{ mount.local_dir }}"
-  register: _local_dir
+    path: "{{ mount.mount_point }}"
+  register: _mount_point
 
-- name: Check if local folder is empty
+# - debug: var=_mount_point
+
+- name: Safety check
+  ansible.builtin.assert:
+    that:
+      - _mount_point.stat.exists
+      - _mount_point.stat.isdir
+    fail_msg: >-
+      For mount '{{ mount.name }}', mount point '{{ mount.mount_point }}' does not exist or is not a directory.
+    quiet: true
+
+# After this point the mount_point exists and is a directory
+
+- name: Check if something is already mounted on mount point
+  ansible.builtin.command:
+    cmd: findmnt --mountpoint {{ mount.mount_point | quote }} --json
+  register: _findmnt
+  changed_when: false
+  failed_when: false
+
+- name: Set facts
+  ansible.builtin.set_fact:
+    mount_point_is_mounted: "{{ _findmnt.rc == 0 }}"
+    _bucket: "{{ mount.bucket | default(s3fs_bucket) }}"
+
+- name: Check if mount point is empty
   ansible.builtin.command:
     argv:
       - find
-      - "{{ mount.local_dir }}"
+      - "{{ mount.mount_point }}"
       - -mindepth
       - "1"
       - -print
@@ -21,39 +45,22 @@
   register: _find_check
   changed_when: false
   failed_when: false
-  when:
-    - _local_dir.stat.exists
-    - _local_dir.stat.isdir
+  when: not mount_point_is_mounted
 
-# TODO check if something is mounted already
-#
-- name: set facts
+- name: Set facts
   ansible.builtin.set_fact:
-    local_dir_exists: "{{ _local_dir.stat.exists and _local_dir.stat.isdir }}"
-    local_dir_is_empty: "{{ _local_dir.stat.exists and _local_dir.stat.isdir and _find_check.stdout == '' }}"
-    local_dir_is_mounted: "{{ mount.local_dir in ansible_facts['mounts'] | map(attribute='mount') }}"
-    _bucket: "{{ mount.bucket | default(s3fs_bucket) }}"
+    mount_point_is_empty: "{{ _find_check.stdout == '' }}"
 
-- debug: var=local_dir_is_mounted
+# - debug: var=mount_point_is_mounted
+# - debug: var=mount_point_is_empty
 
-- name: Ensure local path exists and has correct owner/group/mode
-  ansible.builtin.file:
-    path: "{{ mount.local_dir }}"
-    state: directory
-    owner: "{{ mount.local_dir_uid | default(s3fs_local_dir_uid) }}"
-    group: "{{ mount.local_dir_gid | default(s3fs_local_dir_gid) }}"
-    mode: "{{ mount.local_dir_mode | default(s3fs_local_dir_mode) | string }}"
-  when:
-    - local_dir_is_empty
-    - mount.create_local_dir | default(s3fs_create_local_dir)
-
-# - debug: var=_local_dir
+# - debug: var=_mount_point
 # - debug: var=_find_check
 
 - name: Fetch 0 byte marker info
   amazon.aws.s3_object_info:
     bucket_name: "{{ _bucket }}"
-    prefix: "{{ mount.s3_prefix }}/"
+    prefix: "{{ mount.s3_prefix }}"
     max_keys: 1
   delegate_to: localhost
   become: false
@@ -63,7 +70,7 @@
 - name: Fetch 0 byte marker info - details
   amazon.aws.s3_object_info:
     bucket_name: "{{ _bucket }}"
-    object_name: "{{ mount.s3_prefix }}/"
+    object_name: "{{ mount.s3_prefix }}"
     max_keys: 1
   delegate_to: localhost
   become: false
@@ -76,10 +83,11 @@
 - name: Set metadata
   ansible.builtin.set_fact:
     required_metadata:
-      uid: "{{ mount.local_dir_uid | default(_local_path.stat.uid) | default(s3fs_local_dir_uid) | string }}"
-      gid: "{{ mount.local_dir_gid | default(_local_path.stat.gid) | default(s3fs_local_dir_gid) | string }}"
-      mode: "{{ mount.local_dir_mode | default(_local_path.stat.mode) | default(s3fs_local_dir_mode) | string }}"
+      uid: "{{ _mount_point.stat.uid | string }}"
+      gid: "{{ _mount_point.stat.gid | string }}"
+      mode: "0{{ _mount_point.stat.mode | string }}"
     current_metadata: "{{ zbmi | json_query('object_info[0].object_data.metadata') | default({}, true) }}"
+
 # - debug: var=required_metadata
 # - debug: var=current_metadata
 
@@ -95,18 +103,17 @@
 - name: Ensure 0 byte marker exists
   amazon.aws.s3_object:
     bucket: "{{ _bucket }}"
-    object: "{{ mount.s3_prefix }}/"
+    object: "{{ mount.s3_prefix }}"
     region: "{{ aws_region }}"
     mode: put
     content: ""
     overwrite: true
     metadata: "{{ required_metadata }}"
     headers:
-      Content-Type: "application/x-directory; charset=UTF-8"
+      Content-Type: "application/x-directory"
   delegate_to: localhost
   become: false
   when: (zbm.s3_keys | length == 0) or metadata_needs_updating
-
 
 # At this stage we should have everything to mount
 # TODO: warn if mountpoint is not empty and:
@@ -114,13 +121,37 @@
 # - sync content to bucket/prefix
 # - remove old content below mountpoint
 
-- debug: var=_bucket
-- debug: var=mount.s3_prefix
+# - debug: var=_bucket
+# - debug: var=mount.s3_prefix
+
+- name: Ensure dependent services are stopped before mounting operations
+  ansible.builtin.systemd_service:
+    name: "{{ service }}"
+    state: stopped
+  loop: "{{ mount.services | default([]) }}"
+  loop_control:
+    loop_var: service
+
+- name: Ensure existing content is copied to bucket
+  ansible.builtin.include_tasks:
+    file: copy_content_to_bucket.yml
+  when: not mount_point_is_empty
 
 - name: Ensure bucket/prefix is mounted
   ansible.posix.mount:
-    path: "{{ mount.local_dir }}"
-    src: "{{ _bucket }}:/{{ mount.s3_prefix | regex_replace('^/', '') }}"
+    path: "{{ mount.mount_point }}"
+    # This does need a slash before the prefix. Because we have made sure there
+    # is no leading slash, we can hard code one here.
+    src: "{{ _bucket }}:/{{ mount.s3_prefix  }}"
     fstype: fuse.s3fs
     opts: "{{ s3fs_flags | sort | join(',') }}"
+    state: "{{ 'remounted' if metadata_needs_updating else 'mounted' }}"
     state: mounted
+
+- name: Ensure dependent services are started again after mounting operations
+  ansible.builtin.systemd_service:
+    name: "{{ service }}"
+    state: started
+  loop: "{{ mount.services | default([]) }}"
+  loop_control:
+    loop_var: service

@@ -1,0 +1,52 @@
+---
+# Logic to move existing content to the bucket.
+# 1. Create a temporary directory on the host
+# 2. Mount the bucket on there
+# 3. Recursively copy the content below the mount point to the temporary directory.
+# 4. Unmount the temporary directory
+# 5. Move the content below the mount point to /tmp (or delete it?)
+
+- name: Ensure we have a temporary directory
+  ansible.builtin.tempfile:
+    state: directory
+    suffix: temp
+  register: temp_dir
+
+- name: Ensure bucket/prefix is mounted on temporary mount point
+  ansible.posix.mount:
+    path: "{{ temp_dir.path }}"
+    # This does need a slash before the prefix. Because we have made sure there
+    # is no leading slash, we can hard code one here.
+    src: "{{ _bucket }}:/{{ mount.s3_prefix  }}"
+    fstype: fuse.s3fs
+    opts: "{{ s3fs_flags | sort | join(',') }}"
+    state: mounted
+  register: tmpmount
+
+- name: Recursively copy contents
+  ansible.builtin.command:
+    cmd: >
+      cp -av {{ mount.mount_point | quote }}/. {{ temp_dir.path | quote }}/
+  register: rcp
+
+- name: Ensure temporary mount point is unmounted
+  ansible.posix.mount:
+    path: "{{ temp_dir.path }}"
+    # This does need a slash before the prefix. Because we have made sure there
+    # is no leading slash, we can hard code one here.
+    src: "{{ _bucket }}:/{{ mount.s3_prefix  }}"
+    fstype: fuse.s3fs
+    opts: "{{ s3fs_flags | sort | join(',') }}"
+    state: absent
+  register: tmpumount
+  when: not rcp.failed
+
+# FIXME should this be a cp or mv?
+- name: Ensure content below mount point is removed
+  ansible.builtin.command:
+    cmd: >
+      find {{ mount.mount_point | quote }} -mindepth 1 -delete
+
+# - debug: var=tmpmount
+# - debug: var=rcp
+# - debug: var=tmpumount

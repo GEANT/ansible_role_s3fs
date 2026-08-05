@@ -5,6 +5,8 @@
       - s3fs
   become: true
 
+# TODO safety/sanity checks here, before we start doing work
+
 - name: Ensure mounts are available
   ansible.builtin.include_tasks:
     file: mount.yml
