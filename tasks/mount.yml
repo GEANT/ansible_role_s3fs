@@ -33,7 +33,7 @@
     mount_point_is_mounted: "{{ _findmnt.rc == 0 }}"
     _bucket: "{{ mount.bucket | default(s3fs_bucket) }}"
 
-- name: Check if mount point is empty
+- name: Find content below mount point
   ansible.builtin.command:
     argv:
       - find
@@ -49,15 +49,15 @@
 
 - name: Set facts
   ansible.builtin.set_fact:
-    mount_point_is_empty: "{{ _find_check.stdout == '' }}"
+    # We assume a mount point is empty when it is already mounted
+    mount_point_is_empty: "{{ (_find_check.stdout | default('')) == '' }}"
 
 # - debug: var=mount_point_is_mounted
 # - debug: var=mount_point_is_empty
-
 # - debug: var=_mount_point
 # - debug: var=_find_check
 
-- name: Fetch 0 byte marker info
+- name: Check 0-byte directory marker existance
   amazon.aws.s3_object_info:
     bucket_name: "{{ _bucket }}"
     prefix: "{{ mount.s3_prefix }}"
@@ -67,7 +67,7 @@
   register: zbm
 # - debug: var=zbm
 
-- name: Fetch 0 byte marker info - details
+- name: Fetch 0-byte directory marker info
   amazon.aws.s3_object_info:
     bucket_name: "{{ _bucket }}"
     object_name: "{{ mount.s3_prefix }}"
@@ -97,9 +97,6 @@
 
 # - debug: var=metadata_needs_updating
 
-# FIXME
-# this results in ??? failed mounts
-# the metadata is the culprit
 - name: Ensure 0 byte marker exists
   amazon.aws.s3_object:
     bucket: "{{ _bucket }}"
@@ -115,16 +112,7 @@
   become: false
   when: (zbm.s3_keys | length == 0) or metadata_needs_updating
 
-# At this stage we should have everything to mount
-# TODO: warn if mountpoint is not empty and:
-# - stop services
-# - sync content to bucket/prefix
-# - remove old content below mountpoint
-
-# - debug: var=_bucket
-# - debug: var=mount.s3_prefix
-
-- name: Ensure dependent services are stopped before mounting operations
+- name: Ensure dependent systemd services are stopped
   ansible.builtin.systemd_service:
     name: "{{ service }}"
     state: stopped
@@ -135,7 +123,9 @@
 - name: Ensure existing content is copied to bucket
   ansible.builtin.include_tasks:
     file: copy_content_to_bucket.yml
-  when: not mount_point_is_empty
+  when:
+    - not mount_point_is_empty
+    - not mount_point_is_mounted
 
 - name: Ensure bucket/prefix is mounted
   ansible.posix.mount:
@@ -148,7 +138,7 @@
     state: "{{ 'remounted' if metadata_needs_updating else 'mounted' }}"
     state: mounted
 
-- name: Ensure dependent services are started again after mounting operations
+- name: Ensure dependent systemd service are started again
   ansible.builtin.systemd_service:
     name: "{{ service }}"
     state: started
