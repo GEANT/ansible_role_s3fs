@@ -23,6 +23,22 @@ Example Playbook
 
 Including an example of how to use your role (for instance, with variables passed in as parameters) is always nice for users too:
 
+```yaml
+    s3fs_enable: true
+    s3fs_bucket: "{{ s3_bucket_names['backups'] }}"
+    s3fs_mounts:
+      - name: Nagios state
+        mount_point: /var/log/nagios4/archives
+        s3_prefix: nagios4-archives/
+        services:
+          - nagios4
+      - name: Let's Encrypt
+        mount_point: /etc/letsencrypt
+        s3_prefix: letsencrypt/
+        services:
+          - certbot.timer
+```
+
     - hosts: servers
       roles:
          - { role: username.rolename, x: 42 }
