@@ -17,16 +17,16 @@
     path: "{{ temp_dir.path }}"
     # This does need a slash before the prefix. Because we have made sure there
     # is no leading slash, we can hard code one here.
-    src: "{{ _bucket }}:/{{ mount.s3_prefix  }}"
+    src: "{{ _bucket }}:/{{ mount.s3_prefix }}"
     fstype: fuse.s3fs
     opts: "{{ s3fs_flags | sort | join(',') }}"
     state: mounted
   register: tmpmount
 
-- name: Recursively copy contents
+- name: Recursively copy contents  # noqa no-changed-when
   ansible.builtin.command:
     cmd: >
-      cp -av {{ mount.mount_point | quote }}/. {{ temp_dir.path | quote }}/
+      cp -arv {{ mount.mount_point | quote }}/. {{ temp_dir.path | quote }}/
   register: rcp
 
 - name: Ensure temporary mount point is unmounted
@@ -34,7 +34,7 @@
     path: "{{ temp_dir.path }}"
     # This does need a slash before the prefix. Because we have made sure there
     # is no leading slash, we can hard code one here.
-    src: "{{ _bucket }}:/{{ mount.s3_prefix  }}"
+    src: "{{ _bucket }}:/{{ mount.s3_prefix }}"
     fstype: fuse.s3fs
     opts: "{{ s3fs_flags | sort | join(',') }}"
     state: absent
@@ -42,7 +42,7 @@
   when: not rcp.failed
 
 # FIXME should this be a cp or mv?
-- name: Ensure content below mount point is removed
+- name: Ensure content below mount point is removed  # noqa no-changed-when
   ansible.builtin.command:
     cmd: >
       find {{ mount.mount_point | quote }} -mindepth 1 -delete

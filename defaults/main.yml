@@ -4,6 +4,12 @@ s3fs_mounts: []
 # defaults to be used for each mount
 s3fs_bucket:
 s3fs_region: "{{ aws_region }}"
+
+# When this is true, any content below the mountpoint will be copied to
+# the bucket first. This can be used to effectively move local content
+# to a bucket.
+s3fs_copy_content: false
+
 s3fs_flags:
   - iam_role=auto
   - _netdev
