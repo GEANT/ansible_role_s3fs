@@ -8,7 +8,18 @@
     path: "{{ mount.mount_point }}"
   register: _mount_point
 
-# - debug: var=_mount_point
+# TODO verify S3 authorisation if static credentials are set
+# - name: Verify S3 authorisation before mounting
+#   amazon.aws.s3_object_info:
+#     bucket: "my-s3-bucket"
+#     aws_access_key: "{{ s3_access_key }}"
+#     aws_secret_key: "{{ s3_secret_key }}"
+#   delegate_to: localhost
+
+# If the above works, then ensure that the credentials are available as
+# a single line in the system wide file /etc/passwd-s3fs:
+# bucket-alpha:AKIAIOSFODNN7EXAMPLE:wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY
+#
 
 - name: Safety check
   ansible.builtin.assert:
