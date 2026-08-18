@@ -3,18 +3,20 @@ s3fs_mounts: []
 
 # defaults to be used for each mount
 s3fs_bucket:
-s3fs_region: "{{ aws_region }}"
+s3fs_region: "{{ aws_region | default('eu-central-1') }}"
 
 # When this is true, any content below the mountpoint will be copied to
 # the bucket first. This can be used to effectively move local content
 # to a bucket.
 s3fs_copy_content: false
 
+s3fs_password_file: /etc/passwd-s3fs
 s3fs_flags:
-  - iam_role=auto
   - _netdev
   - allow_other
   - compat_dir
   - enable_content_md5
   - "endpoint={{ s3fs_region }}"
+  - nonempty
+  - "passwd_file={{ s3fs_password_file }}"
   - "url=https://s3.{{ s3fs_region }}.amazonaws.com"

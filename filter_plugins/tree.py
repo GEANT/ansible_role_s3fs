@@ -50,7 +50,8 @@ def to_tree(data, base_path=None):
     lines = [root_label]
 
     def _build_lines(node, prefix=''):
-        items = list(node.keys())
+        # Sort keys to ensure directories and files are rendered alphabetically
+        items = sorted(node.keys())
         for index, key in enumerate(items):
             is_last = index == len(items) - 1
             connector = '└── ' if is_last else '├── '

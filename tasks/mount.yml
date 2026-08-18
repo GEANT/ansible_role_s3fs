@@ -11,12 +11,12 @@
 - name: Ensure authorisation is OK
   amazon.aws.s3_object_info:
     bucket_name: "{{ mount.bucket | default(s3fs_bucket) }}"
-    aws_access_key: "{{ mount.access_key | default(s3fs_access_key, true) | default(omit, true) }}"
-    aws_secret_key: "{{ mount.secret_key | default(s3fs_secret_key, true) | default(omit, true) }}d"
+    # aws_access_key: "{{ mount.access_key | default(s3fs_access_key, true) | default(omit, true) }}"
+    # aws_secret_key: "{{ mount.secret_key | default(s3fs_secret_key, true) | default(omit, true) }}"
 
 - name: Ensure entry is available in /etc/passwd-s3fs if needed
   ansible.builtin.lineinfile:
-    path: /etc/passwd-s3fs
+    path: "{{ s3fs_password_file }}"
     owner: root
     group: root
     mode: "0600"
@@ -70,13 +70,29 @@
 
       {{ _find_check | to_tree(mount.mount_point) }}
 
-      Should we recursively copy this content to the bucket? [y/N]
+      Should we recursively copy this content to the bucket? [y/N/s]
+
+      Answering Yes [y] will copy the files to S3 before mounting.
+      Answering No [N] will mount over the directory, hiding existing files.
+      Answering Stop [s] will abort execution immediately.
+
   register: user_input_response
   when: (_find_check.matched | default(0) > 0)
+
+- name: Abort execution requested by user
+  ansible.builtin.fail:
+    msg: "Playbook execution aborted by user for mount '{{ mount.name }}'."
+  when:
+    - (_find_check.matched | default(0) > 0)
+    - user_input_response.user_input | lower == 's'
 
 - name: Set copy confirmation flag
   ansible.builtin.set_fact:
     should_copy_content: "{{ (user_input_response.user_input | default('') | lower) in ['y', 'yes'] | default(false) }}"
+
+- debug: var=should_copy_content
+
+# - wait_for:
 
 - name: Check 0-byte directory marker existance
   amazon.aws.s3_object_info:
@@ -87,15 +103,19 @@
   become: false
   register: zbm
 
+# - debug: var=zbm
+
 - name: Fetch 0-byte directory marker info
   amazon.aws.s3_object_info:
     bucket_name: "{{ _bucket }}"
-    object_name: "{{ mount.s3_prefix }}"
+    object_name: "{{ mount.s3_prefix if mount.s3_prefix.endswith('/') else mount.s3_prefix ~ '/' }}"
     max_keys: 1
   delegate_to: localhost
   become: false
   when: zbm.s3_keys|length == 1
   register: zbmi
+
+# - debug: var=zbmi
 
 - name: Set metadata
   ansible.builtin.set_fact:
@@ -112,11 +132,11 @@
 - name: Ensure 0 byte marker exists
   amazon.aws.s3_object:
     bucket: "{{ _bucket }}"
-    object: "{{ mount.s3_prefix }}"
-    region: "{{ aws_region }}"
+    object: "{{ mount.s3_prefix if mount.s3_prefix.endswith('/') else mount.s3_prefix ~ '/' }}"
     mode: put
-    content: ""
-    overwrite: always
+    # content: ""
+    src: /dev/null
+    overwrite: different
     metadata: "{{ required_metadata }}"
     headers:
       Content-Type: "application/x-directory"
@@ -132,7 +152,7 @@
   loop_control:
     loop_var: service
 
-- name: Ensure existing content is copied to bucket
+- name: Ensure existing content is copied to bucket (this could take while)
   ansible.builtin.include_tasks:
     file: copy_content_to_bucket.yml
   when: should_copy_content
