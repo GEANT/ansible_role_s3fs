@@ -11,8 +11,6 @@
 - name: Ensure authorisation is OK
   amazon.aws.s3_object_info:
     bucket_name: "{{ mount.bucket | default(s3fs_bucket) }}"
-    # aws_access_key: "{{ mount.access_key | default(s3fs_access_key, true) | default(omit, true) }}"
-    # aws_secret_key: "{{ mount.secret_key | default(s3fs_secret_key, true) | default(omit, true) }}"
 
 - name: Ensure entry is available in /etc/passwd-s3fs if needed
   ansible.builtin.lineinfile:
@@ -63,14 +61,6 @@
   failed_when: false
   when: not mount_point_is_mounted
 
-
-
-# - copy:
-#     content: "{{ _find_check | to_nice_yaml }}"
-#     dest: /tmp/find.yml
-#   delegate_to: localhost
-#   become: false
-
 - name: Prompt user for copy confirmation
   ansible.builtin.pause:
     prompt: |
@@ -87,7 +77,7 @@
   register: user_input_response
   when: (_find_check.matched | default(0) > 0)
 
-- name: Abort execution requested by user
+- name: Abort execution if requested by user
   ansible.builtin.fail:
     msg: "Playbook execution aborted by user for mount '{{ mount.name }}'."
   when:
@@ -98,8 +88,7 @@
   ansible.builtin.set_fact:
     should_copy_content: "{{ (user_input_response.user_input | default('') | lower) in ['y', 'yes'] | default(false) }}"
 
-- debug: var=should_copy_content
-
+# - debug: var=should_copy_content
 # - wait_for:
 
 - name: Check 0-byte directory marker existance
@@ -133,11 +122,11 @@
       mode: "0{{ _mount_point.stat.mode | string }}"
     current_metadata: "{{ zbmi | json_query('object_info[0].object_data.metadata') | default({}, true) }}"
 
-- name: Set update flag
+- name: Set metadata update flag
   ansible.builtin.set_fact:
     metadata_needs_updating: "{{ required_metadata.items() | difference(current_metadata.items()) | length > 0 }}"
 
-- name: Ensure 0 byte marker exists
+- name: Ensure 0-byte directory marker exists
   amazon.aws.s3_object:
     bucket: "{{ _bucket }}"
     object: "{{ mount.s3_prefix if mount.s3_prefix.endswith('/') else mount.s3_prefix ~ '/' }}"
