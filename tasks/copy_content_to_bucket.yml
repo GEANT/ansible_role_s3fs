@@ -23,11 +23,46 @@
     state: mounted
   register: tmpmount
 
-- name: Recursively copy contents  # noqa no-changed-when
+# - debug: var=_find_check.files
+
+- name: Set fact for unique directory paths sorted by depth
+  ansible.builtin.set_fact:
+    unique_dirs: >-
+      {{
+        _find_check.files
+        | selectattr('isdir')
+        | sort(attribute='path')
+      }}
+
+- name: Create required directory structure
+  ansible.builtin.file:
+    path: "{{ temp_dir.path }}/{{ item.path | relpath(mount.mount_point) }}"
+    state: directory
+    owner: "{{ item.pw_name if (item.pw_name | default('') | length > 0) else item.uid }}"
+    group: "{{ item.gr_name if (item.gr_name | default('') | length > 0) else item.gid }}"
+    mode: "{{ item.mode }}"
+  loop: "{{ unique_dirs }}"
+  loop_control:
+    label: >-
+      {{ item.path | relpath(mount.mount_point) }},
+      type: directory,
+      owner: {{ item.pw_name if (item.pw_name | default('') | length > 0) else item.uid }},
+      group: {{ item.gr_name if (item.gr_name | default('') | length > 0) else item.gid }}
+
+- name: Copy items retaining attributes and special file types
   ansible.builtin.command:
-    cmd: >
-      cp -arv {{ mount.mount_point | quote }}/. {{ temp_dir.path | quote }}/
-  register: rcp
+    cmd: >-
+      cp -a --no-dereference
+      {{ item.path | quote }}
+      {{ (temp_dir.path ~ '/' ~ (item.path | relpath(mount.mount_point))) | quote }}
+  loop: "{{ _find_check.files | rejectattr('isdir') }}"
+  loop_control:
+    label: >-
+      {{ item.path | relpath(mount.mount_point) }},
+      size: {{ (item.size / 1024) | round(1) }}kB,
+      type: {{ 'symlink' if item.islnk else ('regular' if item.isreg else ('fifo' if item.isfifo else ('char_dev' if item.ischr else ('block_dev' if item.isblk else 'socket')))) }},
+      owner: {{ item.pw_name if (item.pw_name | default('') | length > 0) else item.uid }},
+      group: {{ item.gr_name if (item.gr_name | default('') | length > 0) else item.gid }}
 
 - name: Ensure temporary mount point is unmounted
   ansible.posix.mount:

@@ -63,6 +63,14 @@
   failed_when: false
   when: not mount_point_is_mounted
 
+
+
+# - copy:
+#     content: "{{ _find_check | to_nice_yaml }}"
+#     dest: /tmp/find.yml
+#   delegate_to: localhost
+#   become: false
+
 - name: Prompt user for copy confirmation
   ansible.builtin.pause:
     prompt: |
