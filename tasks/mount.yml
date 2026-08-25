@@ -137,6 +137,7 @@
   loop: "{{ mount.services | default([]) }}"
   loop_control:
     loop_var: service
+  when: not mount_point_is_mounted
 
 - name: Ensure existing content is copied to bucket (this could take while)
   ansible.builtin.include_tasks:
@@ -158,3 +159,4 @@
   loop: "{{ mount.services | default([]) }}"
   loop_control:
     loop_var: service
+  when: not mount_point_is_mounted
