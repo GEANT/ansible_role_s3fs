@@ -90,13 +90,15 @@
     opts: "{{ s3fs_flags | union(s3fs_auth_flags) | sort | join(',') }}"
     state: absent
   register: tmpumount
-  when: not rcp.failed
+  when: not verify_copy.failed
 
+# Danger zone...
 # FIXME should this be a cp or mv?
 - name: Ensure content below mount point is removed  # noqa no-changed-when
   ansible.builtin.command:
     cmd: >
       find {{ mount.mount_point | quote }} -mindepth 1 -delete
+  when: not verify_copy.failed
 
 # - debug: var=tmpmount
 # - debug: var=rcp
