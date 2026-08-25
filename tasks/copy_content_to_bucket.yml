@@ -65,10 +65,15 @@
       owner: {{ item.pw_name if (item.pw_name | default('') | length > 0) else item.uid }},
       group: {{ item.gr_name if (item.gr_name | default('') | length > 0) else item.gid }}
 
-- name: Verify that contents are the same
+- name: Verify that all content is correctly copied
   ansible.builtin.command:
     cmd: >
-      rsync -racgon -i --delete
+      rsync
+      --dry-run
+      --archive
+      --checksum
+      --itemize-changes
+      --omit-dir-times
       {{ mount.mountpoint | ensure_trailing_slash | quote }}
       {{ tempdir.path | ensure_trailing_slash | quote }}
   register: verify_copy

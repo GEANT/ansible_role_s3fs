@@ -3,14 +3,16 @@
 # -> ensure s3_prefix has one trailing slash
 # -> ensure s3_prefix does not have a leading slash
 
+- debug: var=environment
+
 - name: Stat mount_point
   ansible.builtin.stat:
     path: "{{ mount.mount_point }}"
   register: _mount_point
 
-- name: Ensure authorisation is OK
-  amazon.aws.s3_object_info:
-    bucket_name: "{{ mount.bucket | default(s3fs_bucket) }}"
+# - name: Ensure authorisation is OK
+#   amazon.aws.s3_object_info:
+#     bucket_name: "{{ mount.bucket | default(s3fs_bucket) }}"
 
 - name: Ensure entry is available in /etc/passwd-s3fs if needed
   ansible.builtin.lineinfile:
@@ -26,9 +28,9 @@
     # entry is needed.
     state: "{{ 'present' if access_key and secret_key else 'absent' }}"
   vars:
-    bucket_name: "{{ mount.bucket | default(s3fs_bucket) }}"
-    access_key: "{{ mount.access_key | default(s3fs_access_key, true) }}"
-    secret_key: "{{ mount.secret_key | default(s3fs_secret_key, true) }}"
+    bucket_name: "{{ mount.bucket | default(s3fs_bucket | default('')) }}"
+    access_key: "{{ mount.access_key | default(s3fs_access_key | default('')) }}"
+    secret_key: "{{ mount.secret_key | default(s3fs_secret_key | default('')) }}"
 
 - name: Safety check
   ansible.builtin.assert:

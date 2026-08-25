@@ -18,5 +18,6 @@ s3fs_flags:
   - enable_content_md5
   - "endpoint={{ s3fs_region }}"
   - nonempty
-  - "passwd_file={{ s3fs_password_file }}"
+  # - "passwd_file={{ s3fs_password_file }}"
+  - iam_role=auto
   - "url=https://s3.{{ s3fs_region }}.amazonaws.com"
