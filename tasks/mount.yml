@@ -26,7 +26,7 @@
     # We only hard code credentials when they're available. If not,
     # we assume that an EC2 instance policy is active, and hence no
     # entry is needed.
-    state: "{{ 'present' if access_key and secret_key else 'absent' }}"
+    state: "{{ 'present' if has_static_credentials else 'absent' }}"
   vars:
     bucket_name: "{{ mount.bucket | default(s3fs_bucket | default('')) }}"
     access_key: "{{ mount.access_key | default(s3fs_access_key | default('')) }}"
@@ -165,7 +165,7 @@
     path: "{{ mount.mount_point }}"
     src: "{{ _bucket }}:{{ mount.s3_prefix | ensure_leading_slash }}"
     fstype: fuse.s3fs
-    opts: "{{ s3fs_flags | sort | join(',') }}"
+    opts: "{{ s3fs_flags | union(s3fs_auth_flags) | sort | join(',') }}"
     state: mounted
 
 - name: Ensure dependent systemd services are started again

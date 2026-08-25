@@ -19,7 +19,7 @@
     path: "{{ temp_dir.path }}"
     src: "{{ _bucket }}:{{ mount.s3_prefix | ensure_leading_slash }}"
     fstype: fuse.s3fs
-    opts: "{{ s3fs_flags | sort | join(',') }}"
+    opts: "{{ s3fs_flags | union(s3fs_auth_flags) | sort | join(',') }}"
     state: mounted
   register: tmpmount
 
@@ -80,14 +80,14 @@
 
 - debug: var=verify_copy
 
-- wait_for:
+# - wait_for:
 
 - name: Ensure temporary mount point is unmounted
   ansible.posix.mount:
     path: "{{ temp_dir.path }}"
     src: "{{ _bucket }}:{{ mount.s3_prefix | ensure_leading_slash }}"
     fstype: fuse.s3fs
-    opts: "{{ s3fs_flags | sort | join(',') }}"
+    opts: "{{ s3fs_flags | union(s3fs_auth_flags) | sort | join(',') }}"
     state: absent
   register: tmpumount
   when: not rcp.failed

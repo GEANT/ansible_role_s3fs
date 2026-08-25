@@ -20,6 +20,9 @@
     __access_key: "{{ mount.access_key | default(s3fs_access_key | default('')) }}"
     __secret_key: "{{ mount.secret_key | default(s3fs_secret_key | default('')) }}"
     __region: "{{ mount.region | default(s3fs_region | default('')) }}"
+    has_static_credentials: "{{ __access_key | length > 0 and __secret_key | length > 0 }}"
+    s3fs_auth_flags:
+      - "{{ ('passwd_file=' ~ s3fs_password_file) if has_static_credentials else 'iam_role=auto' }}"
   environment: >
     {{
       ({'AWS_ACCESS_KEY_ID': __access_key} if __access_key else {}) |
