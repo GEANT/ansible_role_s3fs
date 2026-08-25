@@ -74,7 +74,7 @@
       --checksum
       --itemize-changes
       --omit-dir-times
-      {{ mount.mountpoint | ensure_trailing_slash | quote }}
+      {{ mount.mount_point | ensure_trailing_slash | quote }}
       {{ tempdir.path | ensure_trailing_slash | quote }}
   register: verify_copy
 
