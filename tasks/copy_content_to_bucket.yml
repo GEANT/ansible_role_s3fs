@@ -75,7 +75,7 @@
       --itemize-changes
       --omit-dir-times
       {{ mount.mount_point | ensure_trailing_slash | quote }}
-      {{ tempdir.path | ensure_trailing_slash | quote }}
+      {{ temp_dir.path | ensure_trailing_slash | quote }}
   register: verify_copy
 
 - debug: var=verify_copy
