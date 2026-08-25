@@ -65,7 +65,7 @@
       owner: {{ item.pw_name if (item.pw_name | default('') | length > 0) else item.uid }},
       group: {{ item.gr_name if (item.gr_name | default('') | length > 0) else item.gid }}
 
-- name: Verify that all content is correctly copied
+- name: Verify that all content is correctly copied  # noqa no-changed-when command-instead-of-module
   ansible.builtin.command:
     cmd: >
       rsync
@@ -78,10 +78,6 @@
       {{ temp_dir.path | ensure_trailing_slash | quote }}
   register: verify_copy
 
-- debug: var=verify_copy
-
-# - wait_for:
-
 - name: Ensure temporary mount point is unmounted
   ansible.posix.mount:
     path: "{{ temp_dir.path }}"
@@ -92,8 +88,6 @@
   register: tmpumount
   when: not verify_copy.failed
 
-# Danger zone...
-# FIXME should this be a cp or mv?
 - name: Ensure content below mount point is removed  # noqa no-changed-when
   ansible.builtin.command:
     cmd: >

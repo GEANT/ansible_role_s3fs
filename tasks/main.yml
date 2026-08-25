@@ -6,16 +6,7 @@
       - rsync
   become: true
 
-# TODO safety/sanity checks here, before we start doing work
-
 - name: Ensure mounts are available
-  block:
-    - name: Include mount tasks
-      ansible.builtin.include_tasks:
-        file: mount.yml
-      loop: "{{ s3fs_mounts }}"
-      loop_control:
-        loop_var: mount
   vars:
     __access_key: "{{ mount.access_key | default(s3fs_access_key | default('')) }}"
     __secret_key: "{{ mount.secret_key | default(s3fs_secret_key | default('')) }}"
@@ -29,3 +20,10 @@
       combine({'AWS_SECRET_ACCESS_KEY': __secret_key} if __secret_key else {}) |
       combine({'AWS_REGION': __region, 'AWS_DEFAULT_REGION': __region} if __region else {})
     }}
+  block:
+    - name: Include mount tasks
+      ansible.builtin.include_tasks:
+        file: mount.yml
+      loop: "{{ s3fs_mounts }}"
+      loop_control:
+        loop_var: mount
