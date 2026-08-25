@@ -84,9 +84,6 @@
   ansible.builtin.set_fact:
     should_copy_content: "{{ (user_input_response.user_input | default('') | lower) in ['y', 'yes'] | default(false) }}"
 
-# - debug: var=should_copy_content
-# - wait_for:
-
 - name: Check 0-byte directory marker existence
   amazon.aws.s3_object_info:
     bucket_name: "{{ _bucket }}"
@@ -95,8 +92,6 @@
   delegate_to: localhost
   become: false
   register: zbm
-
-# - debug: var=zbm
 
 - name: Fetch 0-byte directory marker info
   amazon.aws.s3_object_info:
@@ -107,8 +102,6 @@
   become: false
   when: zbm.s3_keys|length == 1
   register: zbmi
-
-# - debug: var=zbmi
 
 - name: Construct metadata for 0-byte directory marker
   ansible.builtin.set_fact:

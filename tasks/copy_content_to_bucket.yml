@@ -23,8 +23,6 @@
     state: mounted
   register: tmpmount
 
-# - debug: var=_find_check.files
-
 - name: Set fact for unique directory paths sorted by depth
   ansible.builtin.set_fact:
     unique_dirs: >-
@@ -93,7 +91,3 @@
     cmd: >
       find {{ mount.mount_point | quote }} -mindepth 1 -delete
   when: not verify_copy.failed
-
-# - debug: var=tmpmount
-# - debug: var=rcp
-# - debug: var=tmpumount
