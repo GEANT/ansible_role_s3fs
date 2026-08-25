@@ -3,8 +3,7 @@
   ansible.builtin.apt:
     name:
       - s3fs
-      - python3-boto3
-      - python3-botocore
+      - rsync
   become: true
 
 # TODO safety/sanity checks here, before we start doing work

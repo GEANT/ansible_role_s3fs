@@ -64,6 +64,24 @@ def to_tree(data, base_path=None):
     _build_lines(tree_dict)
     return '\n'.join(lines)
 
+def strip_leading_slashes(val: str) -> str:
+    """Remove all leading slashes from a string."""
+    return str(val).lstrip('/')
+
+
+def ensure_leading_slash(val: str) -> str:
+    """Ensure a string begins with a single leading slash."""
+    return '/' + str(val).lstrip('/')
+
+
+def strip_trailing_slashes(val: str) -> str:
+    """Remove all trailing slashes from a string."""
+    return str(val).rstrip('/')
+
+
+def ensure_trailing_slash(val: str) -> str:
+    """Ensure a string ends with a single trailing slash."""
+    return str(val).rstrip('/') + '/'
 
 class FilterModule:
     """Ansible Jinja2 filter plugin for tree formatting."""
@@ -71,4 +89,8 @@ class FilterModule:
     def filters(self):
         return {
             'to_tree': to_tree,
+            'strip_leading_slashes': strip_leading_slashes,
+            'ensure_leading_slash': ensure_leading_slash,
+            'strip_trailing_slashes': strip_trailing_slashes,
+            'ensure_trailing_slash': ensure_trailing_slash,
         }

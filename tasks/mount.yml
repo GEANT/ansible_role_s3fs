@@ -21,6 +21,9 @@
     create: true
     regexp: "^((?:{{ bucket_name }}):|.*:{{ bucket_name }}:)"
     line: "{{ bucket_name }}:{{ access_key }}:{{ secret_key }}"
+    # We only hard code credentials when they're available. If not,
+    # we assume that an EC2 instance policy is active, and hence no
+    # entry is needed.
     state: "{{ 'present' if access_key and secret_key else 'absent' }}"
   vars:
     bucket_name: "{{ mount.bucket | default(s3fs_bucket) }}"
@@ -70,9 +73,10 @@
 
       Should we recursively copy this content to the bucket? [y/N/s]
 
-      Answering Yes [y] will copy the files to S3 before mounting.
-      Answering No [N] will mount over the directory, hiding existing files.
-      Answering Stop [s] will abort execution immediately.
+      Answering
+       Yes [y]  - will copy the content to the S3 bucket before mounting.
+       No [N]   - will mount over the directory, hiding existing files.
+       Stop [s] - will abort execution immediately.
 
   register: user_input_response
   when: (_find_check.matched | default(0) > 0)
@@ -91,7 +95,7 @@
 # - debug: var=should_copy_content
 # - wait_for:
 
-- name: Check 0-byte directory marker existance
+- name: Check 0-byte directory marker existence
   amazon.aws.s3_object_info:
     bucket_name: "{{ _bucket }}"
     prefix: "{{ mount.s3_prefix }}"
@@ -105,7 +109,7 @@
 - name: Fetch 0-byte directory marker info
   amazon.aws.s3_object_info:
     bucket_name: "{{ _bucket }}"
-    object_name: "{{ mount.s3_prefix if mount.s3_prefix.endswith('/') else mount.s3_prefix ~ '/' }}"
+    object_name: "{{ mount.s3_prefix | ensure_trailing_slash }}"
     max_keys: 1
   delegate_to: localhost
   become: false
@@ -114,7 +118,7 @@
 
 # - debug: var=zbmi
 
-- name: Set metadata
+- name: Construct metadata for 0-byte directory marker
   ansible.builtin.set_fact:
     required_metadata:
       uid: "{{ _mount_point.stat.uid | string }}"
@@ -122,14 +126,14 @@
       mode: "0{{ _mount_point.stat.mode | string }}"
     current_metadata: "{{ zbmi | json_query('object_info[0].object_data.metadata') | default({}, true) }}"
 
-- name: Set metadata update flag
+- name: Set metadata update flag for 0-byte directory marker
   ansible.builtin.set_fact:
     metadata_needs_updating: "{{ required_metadata.items() | difference(current_metadata.items()) | length > 0 }}"
 
-- name: Ensure 0-byte directory marker exists
+- name: Ensure 0-byte directory marker exist and has correct metadata
   amazon.aws.s3_object:
     bucket: "{{ _bucket }}"
-    object: "{{ mount.s3_prefix if mount.s3_prefix.endswith('/') else mount.s3_prefix ~ '/' }}"
+    object: "{{ mount.s3_prefix | ensure_trailing_slash }}"
     mode: put
     # content: ""
     src: /dev/null
@@ -157,9 +161,7 @@
 - name: Ensure bucket/prefix is mounted
   ansible.posix.mount:
     path: "{{ mount.mount_point }}"
-    # This does need a slash before the prefix. Because we have made sure there
-    # is no leading slash, we can hard code one here.
-    src: "{{ _bucket }}:/{{ mount.s3_prefix }}"
+    src: "{{ _bucket }}:{{ mount.s3_prefix | ensure_leading_slash }}"
     fstype: fuse.s3fs
     opts: "{{ s3fs_flags | sort | join(',') }}"
     state: mounted
